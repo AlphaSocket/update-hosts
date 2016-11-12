@@ -1,0 +1,181 @@
+#!/bin/bash
+#
+# .update_hosts
+# 
+# This file download different hosts files containing domains of sites with advertising, viruses and malwares.
+# It compose the new final hosts file using address found in /hosts.local making a backupd of the previous
+#
+
+exit_code=1
+
+# Check if root is running the script
+if [[ $EUID != 0 ]]
+then
+    echo ' Error: Run this file as root'
+else
+    #
+    # DEFINING
+    #
+    
+    # Hosts
+    path_file_hosts='/etc/hosts'
+    path_backup_file='/etc/hosts.backup'
+    path_localhosts_file='/etc/hosts.local'
+    
+    # Sources
+    declare -A link_sources
+    link_sources['someonewhocares']="http://someonewhocares.org/hosts/hosts"
+    link_sources['StevenBlack']="https://raw.githubusercontent.com/StevenBlack/hosts/master/data/StevenBlack/hosts"
+    link_sources['adaway']="https://adaway.org/hosts.txt"
+    link_sources['yoyo']="http://pgl.yoyo.org/adservers/serverlist.php?showintro=0;hostformat=hosts"
+    link_sources['malwaredomainlist']="http://www.malwaredomainlist.com/hostslist/hosts.txt"
+    link_sources['winhelp2002']="http://winhelp2002.mvps.org/hosts.txt"
+    link_sources['hosts-file']="https://hosts-file.net/ad_servers.txt"
+    link_sources['sysctl']="http://sysctl.org/cameleon/hosts"
+    link_sources['hostsfile']="http://www.hostsfile.org/Downloads/hosts.txt"
+    link_sources['netassist']="http://netassist.dl.sourceforge.net/project/adzhosts/HOSTS.txt"
+    link_sources['yous']="https://raw.githubusercontent.com/yous/YousList/master/hosts.txt"
+    link_sources['lewisje']="https://raw.githubusercontent.com/lewisje/jansal/master/adblock/hosts.txt"
+    link_sources['securemecca']="http://securemecca.com/Downloads/hosts.txt"
+    # Moved
+    #link_sources['eladkarako']="http://hosts.eladkarako.com/hosts.txt"
+    #link_sources['logroid']="https://sites.google.com/site/logroid/files/hosts.txt?attredirects=0"
+    # Zipped - http://rlwpx.free.fr/WPFF/hosts.htm
+    #link_sources['hrsk']="http://rlwpx.free.fr/WPFF/hrsk.7z"
+    #link_sources['hpub']="http://rlwpx.free.fr/WPFF/hpub.7z"
+    #link_sources['htrc']="http://rlwpx.free.fr/WPFF/htrc.7z"
+    #link_sources['hblc']="http://rlwpx.free.fr/WPFF/hblc.7z"
+    
+    # Tmp dirs
+    working_dir="/tmp/updater_host"
+    destination_dir="$working_dir/downloaded_hosts"
+    
+    # Automatic message
+    automatic_massage="#\n# -- This file is built automatically -- \n# -- Add host and virtualhosts in /etc/hosts.local and run /home/sam/update_hosts script as root --\n#\n\n"
+    
+    #
+    # STARTING
+    #
+    
+    # Check if is first run
+    if [ -s "$path_localhosts_file" ]
+        then
+            # Move file host to localhost for save previous customizations
+            mv "$path_file_hosts" "$path_localhosts_file"
+            # Echoing first run
+            echo -en "\n - First run detected - \n Moving hosts file to hosts.local"
+    fi
+    
+    # Creating Temp dirs
+    if [ ! -d "$destination_dir" ]
+        then
+            # Remove and create dir
+            rm -rf "$destination_dir"
+            mkdir -p "$destination_dir/"
+    fi
+    
+    # Echoing stage
+    echo -en "\n - Downloading - \n"
+    
+    # Downloading files
+    for file_link_key in "${!link_sources[@]}"
+    do
+        echo -en "-----------------------------------------------\n"
+        echo -en "\n Trying ${link_sources[$file_link_key]} => "
+        response_code=$(curl --max-time 5 --user-agent 'Mozilla/5.0 (iPad; U; CPU OS 3_2_1 like Mac OS X; en-us)' -sL -w '%{http_code}' "${link_sources[$file_link_key]}" -o /dev/null)
+        
+        # Downloading if response is 200
+        if [ $response_code = 200 ]
+            then
+                echo -e "$response_code\n"
+                echo -en " Downloading to $destination_dir/$file_link_key ... \n\n"
+                # If the file is present in the temp directory
+                if [ -s "$destination_dir/$file_link_key" ]
+                    then
+                        # Extracting seconds of date last update of the present file
+                        seconds_last_mod=$(stat -c %Y "$destination_dir/$file_link_key")
+                        # Format the date to 31-Dic-15
+                        date_last_mod=$(date -d@$seconds_last_mod -u '+%d-%b-%y')
+                        # Downloading new file only if is more updated
+                        curl -z ${date_last_mod} --user-agent "Mozilla/5.0 (iPad; U; CPU OS 3_2_1 like Mac OS X; en-us)" -o "$destination_dir/$file_link_key" "${link_sources[$file_link_key]}"
+                    else
+                        # Downloading file
+                        curl --user-agent "Mozilla/5.0 (iPad; U; CPU OS 3_2_1 like Mac OS X; en-us)" -o "$destination_dir/$file_link_key" "${link_sources[$file_link_key]}"
+                fi
+                echo -e "\n Completed.\n"
+            else
+                echo -e "$response_code\n Bad response. \n"
+        fi
+    done
+    
+    # Echoing stage
+    echo -en "\n - Merging - \n"
+    
+    if [ "$(ls -A $destination_dir )" ]
+    then
+        # Merging all downloaded files
+        cat ${destination_dir}/* >> "$working_dir/merged_hosts"
+        # Deleting comments
+        sed -i 's/#.*//' "$working_dir/merged_hosts"
+        # Deleting contents between tags
+        sed -i '/<body>/,/<\/body>/d' "$working_dir/merged_hosts"
+        sed -i '/<head>/,/<\/head>/d' "$working_dir/merged_hosts"
+        sed -i '/<title>/,/<\/title>/d' "$working_dir/merged_hosts"
+        # Deleting tags
+        sed -i 's/<[^>]*>//g' "$working_dir/merged_hosts"
+        # Deleting row with unnecessary localhost pointing
+        sed -i '/localhost/d' "$working_dir/merged_hosts"
+        sed -i '/broadcasthost/d' "$working_dir/merged_hosts"
+        # Replacing 127.0.0.1 with 0.0.0.0
+        #sed -i 's/127.0.0.1/0.0.0.0/g' "$working_dir/merged_hosts"
+        sed -i 's/0.0.0.0/127.0.0.1/g' "$working_dir/merged_hosts"
+        # Removing double spaces
+        sed -i 's/[[:space:]]\+/ /g' "$working_dir/merged_hosts"
+        # Removing empty lines
+        sed -i '/^\s*$/d' "$working_dir/merged_hosts"
+        
+        echo -en "- Completed\n"
+        echo -en "-----------------------------------------------\n"
+        
+        # Echoing stage
+        echo -en "\n - Refreshing - \n"
+        # Removing old backup
+        rm -f ${path_backup_file}
+        # Move file for backup
+        mv ${path_file_hosts} ${path_backup_file}
+        
+        # Adding automatic message to new file
+        echo -e $automatic_massage > ${path_file_hosts}
+        # Adding personal localhosts
+        cat ${path_localhosts_file} >> ${path_file_hosts}
+        # Adding space 
+        echo -e "\n" >> ${path_file_hosts}
+        # Appending hosts to new hosts file removing duplicates
+        sort -u "$working_dir/merged_hosts" >> ${path_file_hosts}
+        # Removing file
+        rm -f "$working_dir/merged_hosts"
+        
+        echo -en "- Completed\n"
+        echo -en "-----------------------------------------------\n"
+        
+        # Check creation of file hosts
+        if [ -s "$path_file_hosts" ]
+            then
+                # Echoing success
+                echo -en "\n - Success: New file hosts created -"
+                exit_code=0
+            else
+                # Restore backup
+                mv ${path_backup_file} ${path_file_hosts}
+                echo -en "\n - Error: File hosts not created -"
+                exit_code=3
+        fi
+        
+    else
+        echo -en "\n - Error: Files not downloaded, check your connection"
+        exit_code=2
+    fi 
+fi
+echo -en "\n"
+
+exit $exit_code
