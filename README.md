@@ -1,6 +1,8 @@
 # update-hosts
-This script download different hosts files containing domains of sites with advertising, viruses and malwares.
-It compose the new final hosts file using address found in /hosts.local making a backupd of the previous
+This script download different lists from the web containing domains of sites with advertising, viruses and malwares.
+
+It make a backup of the /etc/hosts file and compose the final hosts file using previous file and a file found at  /etc/hosts.local containing custom entry for local pc like virtualhosts redirects.
+During the first run the original /etc/hosts file is renamed as /etc/hosts.local
 
 ### Prerequisites
 
