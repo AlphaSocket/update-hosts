@@ -13,13 +13,9 @@ Bash shell
 ```
 git clone https://github.com/AlphaSocket/update-hosts
 ```  
-- Move in the dir 
-```
- cd update-hosts
-```
 
 ### Run
 - Run update-host as Root
 ```
-  sudo ./update-hosts
+  sudo ./update-hosts/update-hosts
 ```
