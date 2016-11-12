@@ -19,5 +19,5 @@ git clone https://github.com/AlphaSocket/update-hosts
 ### Run
 - Run update-host as Root
 ```
-  sudo ./update-host
+  sudo ./update-hosts
 ```
